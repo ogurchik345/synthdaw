@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+
 #define M_PI 3.14159265
 #define tone 1.05946309436
 #define from_word(word) reinterpret_cast<const char*>(word), 2
@@ -27,15 +28,6 @@ struct tick_chord {
     int count;
 };
 
-//Structure of text is tempo(3 digits) only at start of string, TCT on start of every tact of 4/4, END at the end of string
-//Every note is 3 symbols:
-//          1 - A, B, C, D, E, F, G - note
-//          2 - 0-9 octave
-//          3 - '.' or '+', where '+' is up to 1/2 note (halftone)
-//After note is 4 symbols, 2 first is starting tick in tact, 2 last is duration in ticks (start tick + duration < 32)
-//Chords is structure "!XX" where XX is number of notes in chord (every note should have similar time structure)
-//Durations: 01-1/32, 02-1/16, 04-1/8, 08-1/4, 16-1/2, 32-1/1, duration*1.5 for notes with point
-//Example: "120TCT!03C4.0008E4.0008G4.0008END" (C chord). Attention!!! Every tact has only 32 ticks!!!
 void static note_interpreter(std::string input, int* tempo, std::vector<double>* freqs, std::vector<timezone>* durs, int* tacts, std::vector<tick_chord>* chords) {
     int tact = -1;
     std::cout << input << std::endl;
@@ -93,8 +85,6 @@ void static note_interpreter(std::string input, int* tempo, std::vector<double>*
     *tacts = tact + 1;
 }
 
-
-//Just sine wave y=a*sin(bx)
 std::vector<double> static sine_wave(double freq, int time) {
     std::vector<double> total;
     int max = (int)(44100 * ((double)time / 1000));
@@ -106,7 +96,6 @@ std::vector<double> static sine_wave(double freq, int time) {
     return total;
 }
 
-//Random white noise
 std::vector<double> static noise_32767(double freq, int time) {
     std::vector<double> total;
     int max = (int)(44100 * ((double)time / 1000));
@@ -119,7 +108,6 @@ std::vector<double> static noise_32767(double freq, int time) {
     return total;
 }
 
-//sawtooth wave like /|/|/|
 std::vector<double> static sawtooth_wave(double freq, int time) {
     std::vector<double> total;
     int max = (int)(44100 * ((double)time / 1000));
@@ -135,21 +123,19 @@ std::vector<double> static sawtooth_wave(double freq, int time) {
     return total;
 }
 
-//uchar to hex_string for file test
 std::string static uch_to_hex(unsigned char i) {
     std::stringstream ss;
     ss << "0x" << std::setfill('0') << std::setw(2) << std::hex << (int)i;
     return ss.str();
 }
 
-//integer to reversed uint8_t for headers
 void static int_ru8(unsigned short len, int number, std::uint8_t** result) {
     for (int i = 0; i < len; i++) {
         result[0][i] = static_cast<std::uint8_t>(number & 0xFF);
         number >>= 8;
     }
 }
-//creating WAV headers
+
 std::string static createHeaders(int time) {
     std::uint8_t* dword = (uint8_t*)malloc(4 * sizeof(uint8_t));
     std::uint8_t* word = (uint8_t*)malloc(4 * sizeof(uint8_t));
@@ -273,45 +259,4 @@ void static create_sound(std::string filename, std::string input, int instrument
     }
     else
         std::cout << "Failed to open file!" << std::endl;
-}
-
-
-
-int main(void)
-{
-    std::string test = "116TCTD4+0006D4+0602D3+0802D3+1202B2.1606B2.2202D2+2408TCTD1+0006D2+0601D2+0802D2+1202G2+1616TCT!02D2+0001C5+0001D5+0101E5.0202!02D2+0402D5+0402C5+0602!02D3+0802D5+0802!02D3+1202C5+1202B4.1402!02G2+1604A4+1604!02G2+2002G4+2002G4.2202!02D3+2404G4+2404!02D3+2802D4+2802E4.3002TCT!02D2+0002D4+0002E4.0202!02D2+0402D4+0402E4.0602!02D3+0802D4+0802G4.1002!02D3+1202B4.1202A4+1402!02G2+1604G4+1604!02G2+2002G4+2002A4+2202!02D3+2404B4.2404!02D3+2802A4+2802B4.3002TCT!02D2+0001B4.0001C5.0101C5+0202!02D2+0402B4.0402A4+0602!02D3+0802G4.0802!02D3+1202G4+1202A4+1402!02G2+1604B4.1604!02G2+2002A4+2002G4+2202!02D3+2404D4+2404!02D3+2802D4+2802E4.3002TCT!02D2+0002D4+0002E4.0202!02D2+0402D4+0402E4.0602!02D3+0802D4+0802B4.1002!02D3+1202A4+1202G4.1402!02G2+1604G4+1604!02G2+2002G4+2002G4.2202!02D3+2404G4+2404!02D3+2801F5+2801G5.2901G5+3002END";
-    int instrument = 0;
-    int function = 0;
-    std::string text = "120TCTEND";
-    std::string filename = "0";
-    srand((unsigned)time(NULL));
-    while (1) {
-        std::cout << "WELCOME TO SynthDAW 0.0.1!\nChoose instruction from the list\n1.Choose Instrument\n2.Create Sound\n3.Create Test Sound(test.wav)\n4.Exit\n5.Open GUI (WIP)" << std::endl;
-        std::cin >> function;
-        switch (function) {
-        case 1:
-            std::cout << "Choose Instrument\n0-sine(default)\n1-saw\n2-white noise" << std::endl;
-            std::cin >> instrument;
-            break;
-        case 2:
-            std::cout << "Create Sound" << std::endl;
-            std::cout << "type text of your sound" << std::endl;
-            std::cin >> text;
-            std::cout << "type filename (without .wav)" << std::endl;
-            std::cin >> filename;
-            create_sound(filename, text, instrument);
-            break;
-        case 3:
-            std::cout << "Creating test sound" << std::endl;
-            create_sound("test", test, instrument);
-            break;
-        case 4:
-            std::cout << "Exiting!" << std::endl;
-            return 0;
-        default:
-            break;
-        }
-    }
-
-    return 0;
 }
