@@ -6,6 +6,7 @@
 #include <tchar.h>
 #include <string>
 #include <array>
+#include <format>
 #pragma comment(lib, "d3d11.lib")
 #include "synthdaw.h"
 
