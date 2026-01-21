@@ -72,4 +72,4 @@ void static int_ru8(unsigned short len, int number, std::uint8_t** result);
 std::string static createHeaders(int time);
 
 //main function to generate file
-void static create_sound(std::string filename, std::string input, int instrument);
+void create_sound(std::string filename, std::string input, int instrument);

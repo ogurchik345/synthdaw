@@ -9,24 +9,13 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include "synthdaw.h"
 
 #define M_PI 3.14159265
 #define tone 1.05946309436
 #define from_word(word) reinterpret_cast<const char*>(word), 2
 #define from_dword(dword) reinterpret_cast<const char*>(dword), 4
 #define first_note 16.35
-
-struct timezone {
-    int start;
-    int dur;
-    int tact;
-    int nn;
-};
-
-struct tick_chord {
-    int chord;
-    int count;
-};
 
 void static note_interpreter(std::string input, int* tempo, std::vector<double>* freqs, std::vector<timezone>* durs, int* tacts, std::vector<tick_chord>* chords) {
     int tact = -1;
@@ -180,7 +169,7 @@ std::string static createHeaders(int time) {
     return FileTypeBlocID + FileSize + FileFormatID + FormatBlocId + BlocSize + AudioFormat + NbrChannels + Freq + BytesPerSec + BytesPerBloc + BitsPerSample + DataBlocID + DataSize;
 }
 
-void static create_sound(std::string filename, std::string input, int instrument) {
+void create_sound(std::string filename, std::string input, int instrument) {
     std::string rickroll = "114TCT!04A1+0004A3+0004D4.0004F4.0004!05A1+0408A2+0408A3+0408D4.0408F4.0408!04C2.1208C4.1208E4.1208G4.1208!05C2.2004C3.2004C4.2004E4.2004G4.2004!02C2.2404C4.2404!03C2.2804C3.2804C4.2804TCT!04A1.0004C4.0004E4.0004G4.0004!05A1.0408A2.0408C4.0408E4.0408F4.0408!04A1+1208D4.1208F4.1208A4.1208!05A1+2004A2+2004D4.2004F4.2004A4.2004!02A1+2402C5.2402!02A1+2602A4+2602!03A1+2804A2+2804A4.2804TCT!04A1+0004A3+0004D4.0004F4.0004!05A1+0408A2+0408A3+0408D4.0408F4.0408!04C2.1208C4.1208E4.1208G4.1208!05C2.2004C3.2004C4.2004E4.2004G4.2004!02C2.2404C4.2404!03C2.2804C3.2804C4.2804TCTA1+0004!02A1+0408A2+0408C2.1208!03C2.2002C3.2002C4.2002C4.2202!02C2.2402D4.2402E4.2602!02C2.2802E4.2802F4.3002END";
     int tempo;
     int tacts;
