@@ -32,12 +32,11 @@ struct timezone {
     int start;
     int dur;
     int tact;
-    int nn;
 };
 
 //struct used for chords
 struct tick_chord {
-    int chord;
+    int tick;
     int count;
 };
 
@@ -48,10 +47,11 @@ struct tick_chord {
 //          2 - 0-9 octave
 //          3 - '.' or '+', where '+' is up to 1/2 note (halftone)
 //After note is 4 symbols, 2 first is starting tick in tact, 2 last is duration in ticks (start tick + duration < 32)
-//Chords is structure "!XX" where XX is number of notes in chord (every note should have similar time structure)
 //Durations: 01-1/32, 02-1/16, 04-1/8, 08-1/4, 16-1/2, 32-1/1, duration*1.5 for notes with point
-//Example: "120TCT!03C4.0008E4.0008G4.0008END" (C chord). Attention!!! Every tact has only 32 ticks!!!
-void static note_interpreter(std::string input, int* tempo, std::vector<double>* freqs, std::vector<timezone>* durs, int* tacts, std::vector<tick_chord>* chords);
+//Example: "120TCTC4.0008E4.0008G4.0008END" (C chord). Attention!!! Every tact has only 32 ticks!!!
+void static note_interpreter(std::string input, int* tempo, std::vector<double>* freqs, std::vector<timezone>* durs, int* tacts);
+
+void static get_chords(std::vector<timezone> durs, std::vector<tick_chord>* chords, int tacts);
 
 //Just sine wave y=a*sin(bx)
 std::vector<double> static sine_wave(double freq, int time);

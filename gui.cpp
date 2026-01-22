@@ -50,6 +50,11 @@ std::string array_to_string(const std::array<note, 32 * 120>& notes, int tact);
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
+    for (char i = 0; i < 32; i++) {
+        for (char j = 0; j < 120; j++) {
+            notes[static_cast<std::array<note, 3840Ui64>::size_type>(i * 120 + j)] = { i, j, 0, 0., 0. };
+        }
+    }
     std::string test = "116TCTD4+0006D4+0602D3+0802D3+1202B2.1606B2.2202D2+2408TCTD1+0006D2+0601D2+0802D2+1202G2+1616TCT!02D2+0001C5+0001D5+0101E5.0202!02D2+0402D5+0402C5+0602!02D3+0802D5+0802!02D3+1202C5+1202B4.1402!02G2+1604A4+1604!02G2+2002G4+2002G4.2202!02D3+2404G4+2404!02D3+2802D4+2802E4.3002TCT!02D2+0002D4+0002E4.0202!02D2+0402D4+0402E4.0602!02D3+0802D4+0802G4.1002!02D3+1202B4.1202A4+1402!02G2+1604G4+1604!02G2+2002G4+2002A4+2202!02D3+2404B4.2404!02D3+2802A4+2802B4.3002TCT!02D2+0001B4.0001C5.0101C5+0202!02D2+0402B4.0402A4+0602!02D3+0802G4.0802!02D3+1202G4+1202A4+1402!02G2+1604B4.1604!02G2+2002A4+2002G4+2202!02D3+2404D4+2404!02D3+2802D4+2802E4.3002TCT!02D2+0002D4+0002E4.0202!02D2+0402D4+0402E4.0602!02D3+0802D4+0802B4.1002!02D3+1202A4+1202G4.1402!02G2+1604G4+1604!02G2+2002G4+2002G4.2202!02D3+2404G4+2404!02D3+2801F5+2801G5.2901G5+3002END";
     return CreateGUI();
 }
@@ -128,6 +133,8 @@ void MainWindow() {
     ImGui::SameLine(); ImGui::RadioButton("Noise 32767 bit", &instrument_radio, 2);
     ImGui::Text("Tempo:"); ImGui::SameLine(); ImGui::SetNextItemWidth(250.0f); ImGui::SliderInt(" ", &tempo, 100, 200, "%d", ImGuiSliderFlags_ClampOnInput);
     if (ImGui::Button("Save Project")) {
+    }
+    if (ImGui::Button("Load Project")) {
     }
     if (ImGui::Button("Render .wav")) {
         create_sound("test", total, instrument_radio);
@@ -238,40 +245,34 @@ void string_to_array(std::string intact, int tact, std::array<note, 32 * 120>& g
         go[i].state = 0;
     }
     for (int i = 0; i < intact.length(); i++) {
-        if (intact[i] == '!') {
-            i += 2;
-            continue;
+        int note = 0, tick = 0, dur = 0;
+        std::string current = intact.substr(i, 7);
+        //note
+        switch (current[0]) {
+        case 'C': note = 0; break;
+        case 'D': note = 2; break;
+        case 'E': note = 4; break;
+        case 'F': note = 5; break;
+        case 'G': note = 7; break;
+        case 'A': note = 9; break;
+        case 'B': note = 11; break;
         }
-        else {
-            int note = 0, tick = 0, dur = 0;
-            std::string current = intact.substr(i, 7);
-            //note
-            switch (current[0]) {
-            case 'C': note = 0; break;
-            case 'D': note = 2; break;
-            case 'E': note = 4; break;
-            case 'F': note = 5; break;
-            case 'G': note = 7; break;
-            case 'A': note = 9; break;
-            case 'B': note = 11; break;
-            }
-            if (current[2] == '+') {
-                note++;
-            }
-            note += (12 * (current[1] - '0'));
-            //tick+dur
-            tick = stoi(current.substr(3, 2));
-            dur = stoi(current.substr(5, 2));
+        if (current[2] == '+') {
+            note++;
+        }
+        note += (12 * (current[1] - '0'));
+        //tick+dur
+        tick = stoi(current.substr(3, 2));
+        dur = stoi(current.substr(5, 2));
 
-            go[(tick * 120) + note].state = 1;
-            if (dur > 1) {
-                for (int j = 1; j < dur; j++) {
-                    go[((tick + j) * 120) + note].state = 2;
-                }
+        go[(tick * 120) + note].state = 1;
+        if (dur > 1) {
+            for (int j = 1; j < dur; j++) {
+                go[((tick + j) * 120) + note].state = 2;
             }
-            i += 6;
-            continue;
         }
+        i += 6;
+        continue;
     }
 }
 
@@ -305,14 +306,6 @@ std::string array_to_string(const std::array<note, 32 * 120>& notes, int tact) {
                 }
                 std::string formated = std::format("{:02}{:02}", ((int)(notes[cur].tick)), (int)longitude);
                 std::string state = note_sign[notes[cur].note % 12][0] + std::to_string(notes[cur].note / 12) + note_sign[notes[cur].note % 12][1] + formated; 
-                if (chord >= 2) {
-                    if (tick_strings[i][0] != '!')
-                        tick_strings[i].insert(0, "!" + std::format("{:02}", (int)chord));
-                    else {
-                        tick_strings[i][1] = chord / 10 + '0';
-                        tick_strings[i][2] = chord % 10 + '0';
-                    }
-                }
                 tick_strings[i] += state;
             }
         }
@@ -322,12 +315,6 @@ std::string array_to_string(const std::array<note, 32 * 120>& notes, int tact) {
 }
 
 int CreateGUI() {
-
-    for (char i = 0; i < 32; i++) {
-        for (char j = 0; j < 120; j++) {
-            notes[static_cast<std::array<note, 3840Ui64>::size_type>(i * 120 + j)] = { i, j, 0, 0., 0.};
-        }
-    }
 
     ImGui_ImplWin32_EnableDpiAwareness();
     float main_scale = ImGui_ImplWin32_GetDpiScaleForMonitor(::MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY));

@@ -17,13 +17,10 @@
 #define from_dword(dword) reinterpret_cast<const char*>(dword), 4
 #define first_note 16.35
 
-void static note_interpreter(std::string input, int* tempo, std::vector<double>* freqs, std::vector<timezone>* durs, int* tacts, std::vector<tick_chord>* chords) {
+void static note_interpreter(std::string input, int* tempo, std::vector<double>* freqs, std::vector<timezone>* durs, int* tacts) {
     int tact = -1;
     std::cout << input << std::endl;
     size_t pos;
-    int chord = 0;
-    int num_notes = 0;
-    int counter = 0;
     *tempo = std::stoi(input, &pos);
     std::cout << "tempo is:" << *tempo << std::endl;
     while (1) {
@@ -35,18 +32,6 @@ void static note_interpreter(std::string input, int* tempo, std::vector<double>*
             tact++;
             pos += 3;
             continue;
-        }
-        (counter == 0) ? num_notes = 0 : num_notes = chord;
-        if (new_note[0] == '!') {
-            counter = stoi(new_note.substr(1, 2), nullptr);
-            std::cout << " ACCORD/COUNT:" << chord + 1 << "/" << counter << std::endl;
-            chords->push_back({ chord + 1, counter });
-            chord += 1;
-            pos += 3;
-            continue;
-        }
-        else {
-            (counter > 0) ? counter -= 1 : counter = 0;
         }
         switch (new_note[0]) {
         case 'C': note += 0; break;
@@ -65,13 +50,29 @@ void static note_interpreter(std::string input, int* tempo, std::vector<double>*
         }
         pos += 3;
         std::string new_time = input.substr(pos, 4);
-        timezone duration = { stoi(new_time.substr(0,2), nullptr) + (32 * tact), stoi(new_time.substr(2,2), nullptr), tact, num_notes };
+        timezone duration = { stoi(new_time.substr(0,2), nullptr) + (32 * tact), stoi(new_time.substr(2,2), nullptr), tact};
         pos += 4;
-        std::cout << "NOTE: " << new_note << " STARTTIME/DURATION: " << duration.start << "/" << duration.dur << " FREQUENCY: " << freq << " TACT:" << tact << " CHORD:" << num_notes << std::endl;
+        std::cout << "NOTE: " << new_note << " STARTTIME/DURATION: " << duration.start << "/" << duration.dur << " FREQUENCY: " << freq << " TACT:" << tact << std::endl;
         freqs->push_back(freq);
         durs->push_back(duration);
     }
     *tacts = tact + 1;
+}
+
+void static get_chords(std::vector<timezone> durs, std::vector<tick_chord>* chords, int tacts) {
+    int* counts = (int*)malloc(sizeof(int) * tacts * 32);
+    memset(counts, 0, sizeof(int) * tacts * 32);
+    for (int i = 0; i < durs.size(); i++) {
+        for (int j = durs[i].start; j < durs[i].start + durs[i].dur; j++) {
+            counts[j]++;
+        }
+    }
+    for (int i = 0; i < tacts; i++) {
+        for (int j = 0; j < 32; j++) {
+            chords->push_back({ i * 32 + j, counts[i*32+j]});
+        }
+    }
+    free(counts);
 }
 
 std::vector<double> static sine_wave(double freq, int time) {
@@ -177,17 +178,17 @@ void create_sound(std::string filename, std::string input, int instrument) {
     std::vector<double> freqs;
     std::vector<timezone> durs;
     std::vector<tick_chord> chords;
-    note_interpreter(input, &tempo, &freqs, &durs, &tacts, &chords);
+    note_interpreter(input, &tempo, &freqs, &durs, &tacts);
+    get_chords(durs, &chords, tacts);
     total_time = (int)(480000. / (double)tempo) * (tacts);
     double tempo_in_ticks = 480000. / (double)tempo / 32.;
-    int chord_notes = 0;
 
     size_t notes_count = freqs.size();
     std::vector<char> data;
     int bytesPerTact = (int)((44100.) * (480. / (double)tempo));
     std::vector<short> ait_total(bytesPerTact, 0);
     std::vector<double> ait(bytesPerTact, 0);
-    for (int t = 0; t < tacts + 1; t++) {
+    for (int t = 0; t < tacts; t++) {
         std::fill(ait.begin(), ait.end(), 0);
         for (int i = 0; i < notes_count; i++) {
             if (durs[i].tact != t) {
@@ -216,21 +217,11 @@ void create_sound(std::string filename, std::string input, int instrument) {
         }
         int tick = ait.size() / 32;
         for (int i = 0; i < 32; i++) {
-            int chord = 0;
             int demultiplier = 1;
             int current_tick = i + (32 * t);
-            for (int j = 0; j < durs.size(); j++) {
-                if (current_tick >= durs[j].start && current_tick < durs[j].dur + durs[j].start) {
-                    chord = durs[j].nn;
-                    break;
-                }
-            }
-            for (int j = 0; j < chords.size(); j++) {
-                if (chords[j].chord == chord) {
-                    demultiplier = chords[j].count;
-                    break;
-                }
-            }
+            demultiplier = chords[current_tick].count;
+            if (demultiplier <= 1)
+                demultiplier = 1;
             for (int j = i * tick; j < (i + 1) * tick; j++) {
                 ait_total[j] = static_cast<short>(ait[j] / (double)demultiplier);
             }
