@@ -7,6 +7,8 @@
 #include <string>
 #include <array>
 #include <format>
+#include <fstream>
+#include <algorithm>
 #pragma comment(lib, "d3d11.lib")
 #include "synthdaw.h"
 
@@ -27,6 +29,9 @@ std::array<note, 32 * 120> notes;
 std::array<std::string, 1024> tact_strs;
 const char* note_sign[12] = {"C.", "C+", "D.", "D+", "E.", "F.", "F+", "G.", "G+", "A.", "A+", "B."};
 std::string total = "";
+ImVec2 first_pos = { 0., 0. };
+bool first_use = true;
+std::string saved = "";
 
 static ID3D11Device* g_pd3dDevice = nullptr;
 static ID3D11DeviceContext* g_pd3dDeviceContext = nullptr;
@@ -47,6 +52,9 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void MainWindow();
 void string_to_array(std::string intact, int tact, std::array<note, 32 * 120>& go);
 std::string array_to_string(const std::array<note, 32 * 120>& notes, int tact);
+std::string save_file_dialog();
+std::string open_file_dialog();
+void load_string(int& total_tacts, std::string& total, std::string buffer, int& tact, int& tempo);
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
@@ -55,7 +63,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
             notes[static_cast<std::array<note, 3840Ui64>::size_type>(i * 120 + j)] = { i, j, 0, 0., 0. };
         }
     }
-    std::string test = "116TCTD4+0006D4+0602D3+0802D3+1202B2.1606B2.2202D2+2408TCTD1+0006D2+0601D2+0802D2+1202G2+1616TCT!02D2+0001C5+0001D5+0101E5.0202!02D2+0402D5+0402C5+0602!02D3+0802D5+0802!02D3+1202C5+1202B4.1402!02G2+1604A4+1604!02G2+2002G4+2002G4.2202!02D3+2404G4+2404!02D3+2802D4+2802E4.3002TCT!02D2+0002D4+0002E4.0202!02D2+0402D4+0402E4.0602!02D3+0802D4+0802G4.1002!02D3+1202B4.1202A4+1402!02G2+1604G4+1604!02G2+2002G4+2002A4+2202!02D3+2404B4.2404!02D3+2802A4+2802B4.3002TCT!02D2+0001B4.0001C5.0101C5+0202!02D2+0402B4.0402A4+0602!02D3+0802G4.0802!02D3+1202G4+1202A4+1402!02G2+1604B4.1604!02G2+2002A4+2002G4+2202!02D3+2404D4+2404!02D3+2802D4+2802E4.3002TCT!02D2+0002D4+0002E4.0202!02D2+0402D4+0402E4.0602!02D3+0802D4+0802B4.1002!02D3+1202A4+1202G4.1402!02G2+1604G4+1604!02G2+2002G4+2002G4.2202!02D3+2404G4+2404!02D3+2801F5+2801G5.2901G5+3002END";
     return CreateGUI();
 }
 
@@ -114,14 +121,86 @@ void CleanupRenderTarget()
     if (g_mainRenderTargetView) { g_mainRenderTargetView->Release(); g_mainRenderTargetView = nullptr; }
 }
 
-ImVec2 first_pos = { 0., 0. };
-bool first_use = true;
-std::string saved = "";
+std::string save_file_dialog() {
+    OPENFILENAMEA ofn;
+    char szFileName[MAX_PATH] = "";
+
+    ZeroMemory(&ofn, sizeof(ofn));
+
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = NULL;
+    ofn.lpstrFilter = "Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFile = szFileName;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
+    ofn.lpstrDefExt = "txt";
+
+    if (GetSaveFileNameA(&ofn) == TRUE) {
+        return szFileName;
+    }
+    else {
+        return "None";
+    }
+}
+
+std::string open_file_dialog() {
+    OPENFILENAMEA ofn;
+    char szFileName[MAX_PATH] = "";
+
+    ZeroMemory(&ofn, sizeof(ofn));
+
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = NULL;
+    ofn.lpstrFilter = "Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFile = szFileName;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
+    ofn.lpstrDefExt = "txt";
+
+    if (GetOpenFileNameA(&ofn) == TRUE) {
+        return szFileName;
+    }
+    else {
+        return "None";
+    }
+}
+
+void load_string(int& total_tacts, std::string& total, std::string buffer, int& tact, int& tempo) {
+    for (int i = 0; i < 32 * 120; i++) {
+        notes[i].state = 0;
+    }
+
+    total_tacts = 0;
+    total = buffer;
+    tact = 0;
+    tempo = stoi(total.substr(0, 3));
+    std::string formed = std::string(buffer).substr(6, buffer.length() - 9);
+    std::string to_tact = "";
+    for (int i = 0; i < formed.length() + 1; i++) {
+        if (formed[i] == 'T' || i == formed.length()) {
+            string_to_array(to_tact, tact, notes);
+            tact_strs[tact] = array_to_string(notes, tact);
+            tact++;
+            total_tacts++;
+            if (i < formed.length() - 1) {
+                i += 2;
+            }
+            to_tact = "";
+            continue;
+        }
+        else {
+            to_tact += formed[i];
+        }
+    }
+    tact = 0;
+    string_to_array(tact_strs[tact], tact, notes);
+}
 
 void MainWindow() {
     ImGui::Begin("Window", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
     static int tempo = 120;
+    static char ib[6553600] = "";
     static int tact = 0;
     static int instrument_radio = 0;
     int total_tacts = 1;
@@ -132,9 +211,28 @@ void MainWindow() {
     ImGui::SameLine(); ImGui::RadioButton("Saw wave", &instrument_radio, 1);
     ImGui::SameLine(); ImGui::RadioButton("Noise 32767 bit", &instrument_radio, 2);
     ImGui::Text("Tempo:"); ImGui::SameLine(); ImGui::SetNextItemWidth(250.0f); ImGui::SliderInt(" ", &tempo, 100, 200, "%d", ImGuiSliderFlags_ClampOnInput);
-    if (ImGui::Button("Save Project")) {
+    if (ImGui::Button("Save Project to .txt")) {
+        std::string filename = save_file_dialog();
+        std::ofstream MyFile(filename);
+        if (MyFile.is_open()) {
+            MyFile << total;
+            MyFile.close();
+        }
     }
-    if (ImGui::Button("Load Project")) {
+    ImGui::SetNextItemWidth(200.0f);
+    ImGui::InputText("Text to load", ib, sizeof(ib));
+    if (ImGui::Button("Load Project from string")) {
+        load_string(total_tacts, total, ib, tact, tempo);
+    }
+    if (ImGui::Button("Load Project from .txt")) {
+        std::string filename = open_file_dialog();
+        std::ifstream MyFile(filename);
+        std::string line;
+        if (MyFile.is_open()) {
+            std::getline(MyFile, line);
+            load_string(total_tacts, total, line, tact, tempo);
+            MyFile.close();
+        }
     }
     if (ImGui::Button("Render .wav")) {
         create_sound("test", total, instrument_radio);
@@ -233,7 +331,7 @@ void MainWindow() {
     }
     total += "END";
     ImGui::Text("mouse x: %f\nmouse y: %f\non screen: %d\nnote, tick:{%s%d, %d}\nstate: %d\ntotal tacts: %d", mouse.x, mouse.y, on_screen, note_sign[cn % 12], cn / 12, ct, st, total_tacts);
-    ImGui::Text("Application in development! Use coustom\nstrings at your own risk! They can\ncrash application with wrong formatting!");
+    ImGui::Text("Application in development! Use custom\nstrings at your own risk! They can\ncrash application with wrong formatting!");
     ImGui::PushTextWrapPos(320);
     ImGui::TextWrapped("Text: %s", total.c_str());
     
