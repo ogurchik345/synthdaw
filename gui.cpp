@@ -420,7 +420,7 @@ int CreateGUI() {
     RegisterClassExW(&wc);
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"SynthDaw v0.0.2 | Now with GUI!", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, 200, 200, screenWidth/2, screenHeight/2, nullptr, nullptr, wc.hInstance, nullptr);
+    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"SynthDaw v0.0.2a | Save your music!", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, 200, 200, screenWidth/2, screenHeight/2, nullptr, nullptr, wc.hInstance, nullptr);
 
     if (!CreateDeviceD3D(hwnd))
     {
