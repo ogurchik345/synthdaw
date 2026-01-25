@@ -126,51 +126,7 @@ void static int_ru8(unsigned short len, int number, std::uint8_t** result) {
     }
 }
 
-std::string static createHeaders(int time) {
-    std::uint8_t* dword = (uint8_t*)malloc(4 * sizeof(uint8_t));
-    std::uint8_t* word = (uint8_t*)malloc(4 * sizeof(uint8_t));
-
-
-    std::string FileTypeBlocID = "RIFF";
-
-    int_ru8(4, (int)(44100 * 4 * ((double)time / 1000)) + 36, &dword);
-    std::string FileSize(from_dword(dword));
-
-    std::string FileFormatID = "WAVE";
-    std::string FormatBlocId = "fmt ";
-
-    int_ru8(4, 16, &dword);
-    std::string BlocSize(from_dword(dword));
-
-    int_ru8(2, 1, &word);
-    std::string AudioFormat(from_word(word));
-
-    int_ru8(1, 2, &word);
-    std::string NbrChannels(from_word(word));
-
-    int_ru8(4, 44100, &dword);
-    std::string Freq(from_dword(dword));
-
-    int_ru8(4, 44100 * 4, &dword);
-    std::string BytesPerSec(from_dword(dword));
-
-    int_ru8(2, 2, &word);
-    std::string BytesPerBloc(from_word(word));
-
-    int_ru8(2, 16, &word);
-    std::string BitsPerSample(from_word(word));
-
-    std::string DataBlocID = "data";
-
-    int_ru8(4, (int)(44100 * 2 * ((double)time / 1000)), &dword);
-    std::string DataSize(from_dword(dword));
-
-    free(word);
-    free(dword);
-    return FileTypeBlocID + FileSize + FileFormatID + FormatBlocId + BlocSize + AudioFormat + NbrChannels + Freq + BytesPerSec + BytesPerBloc + BitsPerSample + DataBlocID + DataSize;
-}
-
-void create_sound(std::string filename, std::string input, int instrument) {
+void create_sound(std::string filename, std::string input, int instrument, bool memory, std::vector<char>& memoryfile) {
     int tempo;
     int tacts;
     int total_time = 0;
@@ -228,14 +184,26 @@ void create_sound(std::string filename, std::string input, int instrument) {
         const char* pBegin = reinterpret_cast<const char*>(ait_total.data());
         data.insert(data.end(), pBegin, pBegin + (ait_total.size() * sizeof(short)));
     }
-    std::string headers = createHeaders(total_time);
-    FILE* f;
-    fopen_s(&f, (filename + ".wav").c_str(), "wb");
-    if (f != 0) {
-        fwrite(headers.data(), 1, headers.length(), f);
-        fwrite(data.data(), 1, data.size(), f);
-        fclose(f);
+    headers header;
+    header.FileSize = (header.Freq * 4 * ((double)total_time / 1000)) + 36;
+    header.DataSize = (header.Freq * 4 * ((double)total_time / 1000)) + 36;
+    std::vector<char>header_buf;
+    header_buf.resize(sizeof(headers));
+    memcpy(header_buf.data(), &header, sizeof(headers));
+    if (!memory) {
+        FILE* f;
+        fopen_s(&f, (filename + ".wav").c_str(), "wb");
+        if (f != 0) {
+            fwrite(header_buf.data(), 1, header_buf.size(), f);
+            fwrite(data.data(), 1, data.size(), f);
+            fclose(f);
+        }
+        else
+            //old cout
+            std::cout << "Failed to open file!" << std::endl;
     }
-    else
-        std::cout << "Failed to open file!" << std::endl;
+    else {
+        memoryfile.insert(memoryfile.end(), header_buf.begin(), header_buf.end());
+        memoryfile.insert(memoryfile.end(), data.begin(), data.end());
+    }
 }

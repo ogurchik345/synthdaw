@@ -9,8 +9,10 @@
 #include <format>
 #include <fstream>
 #include <algorithm>
-#pragma comment(lib, "d3d11.lib")
+#include <mmsystem.h>
 #include "synthdaw.h"
+#pragma comment(lib, "winmm.lib")
+#pragma comment(lib, "d3d11.lib")
 
 struct note {
     //0-32
@@ -32,6 +34,7 @@ std::string total = "";
 ImVec2 first_pos = { 0., 0. };
 bool first_use = true;
 std::string saved = "";
+static std::vector<char> mem_buf;
 
 static ID3D11Device* g_pd3dDevice = nullptr;
 static ID3D11DeviceContext* g_pd3dDeviceContext = nullptr;
@@ -234,8 +237,18 @@ void MainWindow() {
             MyFile.close();
         }
     }
+    if (ImGui::Button("Play")) {
+        mem_buf.clear();
+        create_sound("test", total, instrument_radio, true, mem_buf);
+        sndPlaySoundA((LPCSTR)mem_buf.data(), SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Stop")) {
+        sndPlaySoundA(NULL, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+    }
     if (ImGui::Button("Render .wav")) {
-        create_sound("test", total, instrument_radio);
+        mem_buf.clear();
+        create_sound("test", total, instrument_radio, false, mem_buf);
         saved = "Succecfully saved in test.wav";
     }
     ImGui::SameLine(); ImGui::Text(saved.c_str());

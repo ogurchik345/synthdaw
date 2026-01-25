@@ -17,12 +17,6 @@
 //tone multiplier
 #define tone 1.05946309436
 
-//WORD(2 bytes) to string
-#define from_word(word) reinterpret_cast<const char*>(word), 2
-
-//DWORD(4 bytes) to string
-#define from_dword(dword) reinterpret_cast<const char*>(dword), 4
-
 //1st note (C0)
 #define first_note 16.35
 
@@ -39,6 +33,24 @@ struct tick_chord {
     int tick;
     int count;
 };
+
+#pragma pack(push, 1)
+struct headers {
+    char FileTypeBlocID[4] = { 'R', 'I', 'F', 'F' };
+    uint32_t FileSize;
+    char FileFormatID[4] = {'W', 'A', 'V', 'E'};
+    char FormadBlocID[4] = { 'f', 'm', 't', ' ' };
+    uint32_t BlocSize = 16;
+    uint16_t AudioFormat = 1;
+    uint16_t NbrChannels = 2;
+    uint32_t Freq = 44100;
+    uint32_t BytesPerSec = Freq * NbrChannels * 16 / 8;
+    uint16_t BytesPerBloc = NbrChannels * 16 / 8;
+    uint16_t BitsPerSample = 16;
+    char DataBlocID[4] = { 'd', 'a', 't', 'a' };
+    uint32_t DataSize;
+};
+#pragma pack(pop)
 
 
 //Structure of text is tempo(3 digits) only at start of string, TCT on start of every tact of 4/4, END at the end of string
@@ -68,8 +80,5 @@ std::string static uch_to_hex(unsigned char i);
 //integer to reversed uint8_t for headers
 void static int_ru8(unsigned short len, int number, std::uint8_t** result);
 
-//creating WAV headers
-std::string static createHeaders(int time);
-
 //main function to generate file
-void create_sound(std::string filename, std::string input, int instrument);
+void create_sound(std::string filename, std::string input, int instrument, bool memory, std::vector<char>& memoryfile);
