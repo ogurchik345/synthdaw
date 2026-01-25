@@ -200,6 +200,8 @@ void load_string(int& total_tacts, std::string& total, std::string buffer, int& 
 }
 
 void MainWindow() {
+    if(!mem_buf.empty())
+        mem_buf.clear();
     ImGui::Begin("Window", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
     static int tempo = 120;
@@ -238,16 +240,16 @@ void MainWindow() {
         }
     }
     if (ImGui::Button("Play")) {
-        mem_buf.clear();
+        sndPlaySoundA(NULL, 0);
         create_sound("test", total, instrument_radio, true, mem_buf);
-        sndPlaySoundA((LPCSTR)mem_buf.data(), SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+        static LPCSTR data = mem_buf.data();
+        PlaySoundA(data, NULL, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
     }
     ImGui::SameLine();
     if (ImGui::Button("Stop")) {
-        sndPlaySoundA(NULL, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+        sndPlaySoundA(NULL, 0);
     }
     if (ImGui::Button("Render .wav")) {
-        mem_buf.clear();
         create_sound("test", total, instrument_radio, false, mem_buf);
         saved = "Succecfully saved in test.wav";
     }
