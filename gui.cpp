@@ -55,7 +55,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 void MainWindow();
 void string_to_array(std::string intact, int tact, std::array<note, 32 * 120>& go);
 std::string array_to_string(const std::array<note, 32 * 120>& notes, int tact);
-std::string save_file_dialog();
+std::string save_file_dialog(std::string name, std::string ext);
 std::string open_file_dialog();
 void load_string(int& total_tacts, std::string& total, std::string buffer, int& tact, int& tempo);
 
@@ -124,7 +124,7 @@ void CleanupRenderTarget()
     if (g_mainRenderTargetView) { g_mainRenderTargetView->Release(); g_mainRenderTargetView = nullptr; }
 }
 
-std::string save_file_dialog() {
+std::string save_file_dialog(std::string name, std::string ext) {
     OPENFILENAMEA ofn;
     char szFileName[MAX_PATH] = "";
 
@@ -132,7 +132,7 @@ std::string save_file_dialog() {
 
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = NULL;
-    ofn.lpstrFilter = "Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFilter = (name + "(*." + ext + ")\0*." + ext + "\0All Files (*.*)\0*.*\0").c_str();
     ofn.lpstrFile = szFileName;
     ofn.nMaxFile = MAX_PATH;
     ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
@@ -217,7 +217,7 @@ void MainWindow() {
     ImGui::SameLine(); ImGui::RadioButton("Noise 32767 bit", &instrument_radio, 2);
     ImGui::Text("Tempo:"); ImGui::SameLine(); ImGui::SetNextItemWidth(250.0f); ImGui::SliderInt(" ", &tempo, 100, 200, "%d", ImGuiSliderFlags_ClampOnInput);
     if (ImGui::Button("Save Project to .txt")) {
-        std::string filename = save_file_dialog();
+        std::string filename = save_file_dialog("Text File", "txt");
         std::ofstream MyFile(filename);
         if (MyFile.is_open()) {
             MyFile << total;
@@ -240,17 +240,18 @@ void MainWindow() {
         }
     }
     if (ImGui::Button("Play")) {
-        sndPlaySoundA(NULL, 0);
-        create_sound("test", total, instrument_radio, true, mem_buf);
-        static LPCSTR data = mem_buf.data();
-        PlaySoundA(data, NULL, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+        //sndPlaySoundA(NULL, 0);
+        //create_sound("test", total, instrument_radio, true, mem_buf);
+        //static LPCSTR data = mem_buf.data();
+        //PlaySoundA(data, NULL, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
     }
     ImGui::SameLine();
     if (ImGui::Button("Stop")) {
         sndPlaySoundA(NULL, 0);
     }
     if (ImGui::Button("Render .wav")) {
-        create_sound("test", total, instrument_radio, false, mem_buf);
+        std::string filename = save_file_dialog("WAVE file", "wav");
+        create_sound(filename, total, instrument_radio, false, mem_buf);
         saved = "Succecfully saved in test.wav";
     }
     ImGui::SameLine(); ImGui::Text(saved.c_str());
