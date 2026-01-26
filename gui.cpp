@@ -132,11 +132,12 @@ std::string save_file_dialog(std::string name, std::string ext) {
 
     ofn.lStructSize = sizeof(ofn);
     ofn.hwndOwner = NULL;
-    ofn.lpstrFilter = (name + "(*." + ext + ")\0*." + ext + "\0All Files (*.*)\0*.*\0").c_str();
+    std::string nameext = (name + "(*." + ext + ")\0*."+"\0All Files (*.*)\0*.*\0");
+    ofn.lpstrFilter = nameext.c_str();
     ofn.lpstrFile = szFileName;
     ofn.nMaxFile = MAX_PATH;
     ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
-    ofn.lpstrDefExt = "txt";
+    ofn.lpstrDefExt = ext.c_str();
 
     if (GetSaveFileNameA(&ofn) == TRUE) {
         return szFileName;

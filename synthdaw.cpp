@@ -192,7 +192,7 @@ void create_sound(std::string filename, std::string input, int instrument, bool 
     memcpy(header_buf.data(), &header, sizeof(headers));
     if (!memory) {
         FILE* f;
-        fopen_s(&f, (filename + ".wav").c_str(), "wb");
+        fopen_s(&f, (filename).c_str(), "wb");
         if (f != 0) {
             fwrite(header_buf.data(), 1, header_buf.size(), f);
             fwrite(data.data(), 1, data.size(), f);
