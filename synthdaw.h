@@ -20,6 +20,7 @@
 //1st note (C0)
 #define first_note 16.35
 
+extern std::string work_dir;
 
 //struct used for arrange notes over time
 struct timezone {
@@ -63,6 +64,7 @@ struct headers {
 //Example: "120TCTC4.0008E4.0008G4.0008END" (C chord). Attention!!! Every tact has only 32 ticks!!!
 void static note_interpreter(std::string input, int* tempo, std::vector<double>* freqs, std::vector<timezone>* durs, int* tacts);
 
+//system to get how many notes in tick
 void static get_chords(std::vector<timezone> durs, std::vector<tick_chord>* chords, int tacts);
 
 //Just sine wave y=a*sin(bx)
@@ -74,11 +76,23 @@ std::vector<double> static noise_32767(double freq, int time);
 //sawtooth wave like /|/|/|
 std::vector<double> static sawtooth_wave(double freq, int time);
 
+//kick C0, clap C0+, hihat D0, snare D0+ 
+std::vector<double> static drum_kit(double freq, int time);
+
 //uchar to hex_string for file test
 std::string static uch_to_hex(unsigned char i);
+
+//read sample in wav without headers
+void static read_data(std::string filename, std::vector<double>& total);
 
 //integer to reversed uint8_t for headers
 void static int_ru8(unsigned short len, int number, std::uint8_t** result);
 
+// wave like /\/\/\/\/\/\/
+std::vector<double> static triangle_wave(double freq, int time);
+
+//wave like |_|
+std::vector<double> static square_wave(double freq, int time);
+
 //main function to generate file
-void create_sound(std::string filename, std::string input, int instrument, bool memory, std::vector<char>& memoryfile);
+void create_sound(std::string filename, std::string input, int instrument, bool memory, std::vector<char>& memoryfile, std::string& progress);

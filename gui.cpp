@@ -10,9 +10,14 @@
 #include <fstream>
 #include <algorithm>
 #include <mmsystem.h>
+#include <future>
+#include <filesystem>
+#include <direct.h>
 #include "synthdaw.h"
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "shlwapi.lib")
+#include <shlwapi.h>
 
 struct note {
     //0-32
@@ -58,9 +63,16 @@ std::string array_to_string(const std::array<note, 32 * 120>& notes, int tact);
 std::string save_file_dialog(std::string name, std::string ext);
 std::string open_file_dialog();
 void load_string(int& total_tacts, std::string& total, std::string buffer, int& tact, int& tempo);
+std::string work_dir;
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
+    //changing working directory
+    char wd[MAX_PATH];
+    DWORD length = GetModuleFileNameA(NULL, wd, MAX_PATH);
+    PathRemoveFileSpecA(wd);
+    work_dir = std::string(wd);
+    std::filesystem::current_path(work_dir);
     for (char i = 0; i < 32; i++) {
         for (char j = 0; j < 120; j++) {
             notes[static_cast<std::array<note, 3840Ui64>::size_type>(i * 120 + j)] = { i, j, 0, 0., 0. };
@@ -206,6 +218,7 @@ void MainWindow() {
     ImGui::Begin("Window", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
     static int tempo = 120;
+    static std::string progress = "Waiting for render";
     static char ib[6553600] = "";
     static int tact = 0;
     static int instrument_radio = 0;
@@ -216,6 +229,9 @@ void MainWindow() {
     ImGui::RadioButton("Sine wave", &instrument_radio, 0);
     ImGui::SameLine(); ImGui::RadioButton("Saw wave", &instrument_radio, 1);
     ImGui::SameLine(); ImGui::RadioButton("Noise 32767 bit", &instrument_radio, 2);
+    ImGui::RadioButton("Drum Kit", &instrument_radio, 3);
+    ImGui::SameLine(); ImGui::RadioButton("Square wave", &instrument_radio, 4);
+    ImGui::SameLine(); ImGui::RadioButton("Triangle wave", &instrument_radio, 5);
     ImGui::Text("Tempo:"); ImGui::SameLine(); ImGui::SetNextItemWidth(250.0f); ImGui::SliderInt(" ", &tempo, 100, 200, "%d", ImGuiSliderFlags_ClampOnInput);
     if (ImGui::Button("Save Project to .txt")) {
         std::string filename = save_file_dialog("Text File", "txt");
@@ -241,6 +257,7 @@ void MainWindow() {
         }
     }
     if (ImGui::Button("Play")) {
+        //use another library (winapi sucks TOO MUCH)
         //sndPlaySoundA(NULL, 0);
         //create_sound("test", total, instrument_radio, true, mem_buf);
         //static LPCSTR data = mem_buf.data();
@@ -252,10 +269,11 @@ void MainWindow() {
     }
     if (ImGui::Button("Render .wav")) {
         std::string filename = save_file_dialog("WAVE file", "wav");
-        create_sound(filename, total, instrument_radio, false, mem_buf);
-        saved = "Succecfully saved in test.wav";
+        //strange but interesting
+        std::future<void> func_res = std::async(std::launch::async, create_sound, filename, total, instrument_radio, false, std::ref(mem_buf), std::ref(progress));
     }
-    ImGui::SameLine(); ImGui::Text(saved.c_str());
+    ImGui::SameLine();
+    ImGui::Text(progress.c_str());
     if (ImGui::Button("Save to clipboard")) {
         ImGui::SetClipboardText(total.c_str());
     }
@@ -348,7 +366,7 @@ void MainWindow() {
     }
     total += "END";
     ImGui::Text("mouse x: %f\nmouse y: %f\non screen: %d\nnote, tick:{%s%d, %d}\nstate: %d\ntotal tacts: %d", mouse.x, mouse.y, on_screen, note_sign[cn % 12], cn / 12, ct, st, total_tacts);
-    ImGui::Text("Application in development! Use custom\nstrings at your own risk! They can\ncrash application with wrong formatting!");
+    ImGui::Text("Application in development! Use custom\nstrings at your own risk! They can\ncrash application with wrong formatting!\n(in drum kit)\nkick C0, clap C0+, hihat D0, snare D0+");
     ImGui::PushTextWrapPos(320);
     ImGui::TextWrapped("Text: %s", total.c_str());
     

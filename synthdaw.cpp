@@ -9,12 +9,12 @@
 #include <algorithm>
 #include <cstdlib>
 #include <ctime>
+#include <windows.h>
+#include <filesystem>
 #include "synthdaw.h"
 
 #define M_PI 3.14159265
 #define tone 1.05946309436
-#define from_word(word) reinterpret_cast<const char*>(word), 2
-#define from_dword(dword) reinterpret_cast<const char*>(dword), 4
 #define first_note 16.35
 
 void static note_interpreter(std::string input, int* tempo, std::vector<double>* freqs, std::vector<timezone>* durs, int* tacts) {
@@ -61,18 +61,23 @@ void static note_interpreter(std::string input, int* tempo, std::vector<double>*
 
 void static get_chords(std::vector<timezone> durs, std::vector<tick_chord>* chords, int tacts) {
     int* counts = (int*)malloc(sizeof(int) * tacts * 32);
-    memset(counts, 0, sizeof(int) * tacts * 32);
-    for (int i = 0; i < durs.size(); i++) {
-        for (int j = durs[i].start; j < durs[i].start + durs[i].dur; j++) {
-            counts[j]++;
+    if(counts != 0)
+        memset(counts, 0, sizeof(int) * tacts * 32);
+    if (counts) {
+        for (int i = 0; i < durs.size(); i++) {
+            for (int j = durs[i].start; j < durs[i].start + durs[i].dur; j++) {
+                counts[j]++;
+            }
+        }
+        for (int i = 0; i < tacts; i++) {
+            for (int j = 0; j < 32; j++) {
+                chords->push_back({ i * 32 + j, counts[i * 32 + j] });
+            }
         }
     }
-    for (int i = 0; i < tacts; i++) {
-        for (int j = 0; j < 32; j++) {
-            chords->push_back({ i * 32 + j, counts[i*32+j]});
-        }
-    }
-    free(counts);
+    if (counts != nullptr)
+        free(counts);
+    counts = nullptr;
 }
 
 std::vector<double> static sine_wave(double freq, int time) {
@@ -82,6 +87,79 @@ std::vector<double> static sine_wave(double freq, int time) {
         //volume = 32767 * (realvolume from 0 to 1)
         double value = 32767. * ((freq == 0 ? 0. : 1.) * (i < 1000 ? (double)i / 1000. : 1.) * (i > max - 1000 ? (double)(max - i) / 1000. : 1.)) * sin(2. * M_PI * freq * (i / 44100));
         total.push_back(value);
+    }
+    return total;
+}
+
+std::vector<double> static square_wave(double freq, int time) {
+    std::vector<double> total;
+    int max = (int)(44100 * ((double)time / 1000));
+    for (double i = 0; i < max; i += 1) {
+        double value = 32767. * ((freq == 0 ? 0. : 1.) * (i < 1000 ? (double)i / 1000. : 1.) * (i > max - 1000 ? (double)(max - i) / 1000. : 1.)) * (sin(2. * M_PI * freq * (i / 44100)) >= 0 ? 1 : -1);
+        total.push_back(value);
+    }
+    return total;
+}
+
+std::vector<double> static triangle_wave(double freq, int time) {
+    std::vector<double> total;
+    int max = (int)(44100 * ((double)time / 1000));
+    for (double i = 0; i < max; i += 1) {
+        //0.85 for right scale
+        double value = 32767. * ((freq == 0 ? 0. : 0.85) * (i < 1000 ? (double)i / 1000.  * 0.85 : 0.85) * (i > max - 1000 ? (double)(max - i) / 1000. * 0.85: 0.85)) * asin(sin(2. * M_PI * freq * (i / 44100)));
+        total.push_back(value);
+    }
+    return total;
+}
+
+void static read_data(std::string filename, std::vector<double>& total) {
+    short value = 0;
+    std::ifstream file(filename, std::ios::binary);
+    if (file.is_open()) {
+
+        //size of file
+        file.seekg(0, std::ios::end);
+        long size = file.tellg();
+
+        file.seekg(0, std::ios::beg);
+        std::string out = "SIZE" + std::to_string(size);
+        //cycle in file
+        for (long i = 0; i < size; i += 2) {
+            file.read(reinterpret_cast<char*>(&value), sizeof(short));
+            total.push_back(static_cast<double>(value));
+            file.seekg(i, std::ios::beg);
+        }
+        file.close();
+    }
+    else {
+        
+    }
+}
+
+std::vector<double> static drum_kit(double freq, int time) {
+    //fix working directory
+    std::filesystem::current_path(work_dir);
+
+    std::vector<double> total;
+    int max = (int)(44100 * ((double)time / 1000));
+    for (double i = 0; i < max; i += 1) {
+        total.push_back(0);
+    }
+    //kick
+    if (freq < 17.) {
+        read_data("sounds/kick.dat", total);
+    }
+    //clap
+    else if (freq > 17. && freq < 18.) {
+        read_data("sounds/clap.dat", total);
+    }
+    //hihat
+    else if (freq > 18. && freq < 19.) {
+        read_data("sounds/hihat.dat", total);
+    }
+    //snare
+    else if (freq > 19. && freq < 20.) {
+        read_data("sounds/snare.dat", total);
     }
     return total;
 }
@@ -126,7 +204,7 @@ void static int_ru8(unsigned short len, int number, std::uint8_t** result) {
     }
 }
 
-void create_sound(std::string filename, std::string input, int instrument, bool memory, std::vector<char>& memoryfile) {
+void create_sound(std::string filename, std::string input, int instrument, bool memory, std::vector<char>& memoryfile, std::string& progress) {
     int tempo;
     int tacts;
     int total_time = 0;
@@ -146,6 +224,7 @@ void create_sound(std::string filename, std::string input, int instrument, bool 
     for (int t = 0; t < tacts; t++) {
         std::fill(ait.begin(), ait.end(), 0);
         for (int i = 0; i < notes_count; i++) {
+            progress = "Note generating:" + std::to_string(i) + "/" + std::to_string(notes_count) + "in tact:" + std::to_string(t) + "/" + std::to_string(tacts);
             if (durs[i].tact != t) {
                 continue;
             }
@@ -161,6 +240,15 @@ void create_sound(std::string filename, std::string input, int instrument, bool 
             case 2:
                 note = noise_32767(freqs[i], tempo_in_ticks * durs[i].dur);
                 break;
+            case 3:
+                note = drum_kit(freqs[i], tempo_in_ticks * durs[i].dur);
+                break;
+            case 4:
+                note = square_wave(freqs[i], tempo_in_ticks * durs[i].dur);
+                break;
+            case 5:
+                note = triangle_wave(freqs[i], tempo_in_ticks * durs[i].dur);
+                break;
             }
             for (int k = 0; k < note.size(); k++) {
                 if (ptr + k < ait.size()) {
@@ -172,18 +260,20 @@ void create_sound(std::string filename, std::string input, int instrument, bool 
         }
         int tick = ait.size() / 32;
         for (int i = 0; i < 32; i++) {
-            int demultiplier = 1;
+            progress = "Note divising:" + std::to_string(i) + "/" + std::to_string(notes_count) + "in tact:" + std::to_string(t) + "/" + std::to_string(tacts);
+            int divisor = 1;
             int current_tick = i + (32 * t);
-            demultiplier = chords[current_tick].count;
-            if (demultiplier <= 1)
-                demultiplier = 1;
+            divisor = chords[current_tick].count;
+            if (divisor <= 1)
+                divisor = 1;
             for (int j = i * tick; j < (i + 1) * tick; j++) {
-                ait_total[j] = static_cast<short>(ait[j] / (double)demultiplier);
+                ait_total[j] = static_cast<short>(ait[j] / (double)divisor);
             }
         }
         const char* pBegin = reinterpret_cast<const char*>(ait_total.data());
         data.insert(data.end(), pBegin, pBegin + (ait_total.size() * sizeof(short)));
     }
+    progress = "Creating headers";
     headers header;
     header.FileSize = (header.Freq * 4 * ((double)total_time / 1000)) + 36;
     header.DataSize = (header.Freq * 4 * ((double)total_time / 1000)) + 36;
@@ -191,6 +281,7 @@ void create_sound(std::string filename, std::string input, int instrument, bool 
     header_buf.resize(sizeof(headers));
     memcpy(header_buf.data(), &header, sizeof(headers));
     if (!memory) {
+        progress = "Saving into file";
         FILE* f;
         fopen_s(&f, (filename).c_str(), "wb");
         if (f != 0) {
@@ -200,10 +291,15 @@ void create_sound(std::string filename, std::string input, int instrument, bool 
         }
         else
             //old cout
-            std::cout << "Failed to open file!" << std::endl;
+            progress = "Failed to open file!";
+
+        progress = "Succecfully saved in " + filename + ".wav"; //python ahh strings
     }
     else {
+        progress = "Saving into memory";
         memoryfile.insert(memoryfile.end(), header_buf.begin(), header_buf.end());
         memoryfile.insert(memoryfile.end(), data.begin(), data.end());
+
+        progress = "Succecfully saved in RAM";
     }
 }
