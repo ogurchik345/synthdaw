@@ -17,18 +17,35 @@
 #define tone 1.05946309436
 #define first_note 16.35
 
-void static note_interpreter(std::string input, int* tempo, std::vector<double>* freqs, std::vector<timezone>* durs, int* tacts) {
+bool static note_interpreter(std::string input, size_t* pos_next, int* tempo, std::vector<double>* freqs, std::vector<timezone>* durs, int* tacts, int track, int* instrument) {
+    std::cout << "TRACK:" << track << std::endl;
     int tact = -1;
     std::cout << input << std::endl;
-    size_t pos;
-    *tempo = std::stoi(input, &pos);
-    std::cout << "tempo is:" << *tempo << std::endl;
+    size_t pos = 0;
+    if (track == 0) {
+        std::string tempotext = input.substr(0, 3);
+        *tempo = std::stoi(tempotext);
+        pos += 3;
+        std::cout << "tempo is:" << *tempo << std::endl;
+    }
+    else {
+        pos = *pos_next;
+    }
+    std::string instrutext = input.substr(pos, 3);
+    std::cout << instrutext << std::endl;
+    if (instrutext == "EOF") {
+        return false;
+    }
+    *instrument = stoi(instrutext);
+    pos += 3;
     while (1) {
         int note = 0;
         std::string new_note = input.substr(pos, 3);
-        if (new_note == "END")
+        if (new_note == "END") {
+            pos += 3;
             break;
-        if (new_note == "TCT") {
+        }
+        else if (new_note == "TCT") {
             tact++;
             pos += 3;
             continue;
@@ -52,11 +69,13 @@ void static note_interpreter(std::string input, int* tempo, std::vector<double>*
         std::string new_time = input.substr(pos, 4);
         timezone duration = { stoi(new_time.substr(0,2), nullptr) + (32 * tact), stoi(new_time.substr(2,2), nullptr), tact};
         pos += 4;
-        std::cout << "NOTE: " << new_note << " STARTTIME/DURATION: " << duration.start << "/" << duration.dur << " FREQUENCY: " << freq << " TACT:" << tact << std::endl;
+        std::cout << "NOTE: " << new_note << " STARTTIME/DURATION: " << duration.start << "/" << duration.dur << " FREQUENCY: " << freq << " TACT:" << tact <<  " TRACK:" << track << " INST:" << *instrument <<std::endl;
         freqs->push_back(freq);
         durs->push_back(duration);
     }
     *tacts = tact + 1;
+    *pos_next = pos;
+    return true;
 }
 
 void static get_chords(std::vector<timezone> durs, std::vector<tick_chord>* chords, int tacts) {
@@ -204,75 +223,125 @@ void static int_ru8(unsigned short len, int number, std::uint8_t** result) {
     }
 }
 
-void create_sound(std::string filename, std::string input, int instrument, bool memory, std::vector<char>& memoryfile, std::string& progress) {
+void create_sound(std::string filename, std::string input, bool memory, std::vector<char>& memoryfile, std::string& progress) {
+    size_t pn;
+    std::vector<std::vector<double>> full_track;
     int tempo;
     int tacts;
+    int track;
+    int instrument;
     int total_time = 0;
-    std::vector<double> freqs;
-    std::vector<timezone> durs;
-    std::vector<tick_chord> chords;
-    note_interpreter(input, &tempo, &freqs, &durs, &tacts);
-    get_chords(durs, &chords, tacts);
-    total_time = (int)(480000. / (double)tempo) * (tacts);
-    double tempo_in_ticks = 480000. / (double)tempo / 32.;
 
-    size_t notes_count = freqs.size();
     std::vector<char> data;
-    int bytesPerTact = (int)((44100.) * (480. / (double)tempo));
-    std::vector<short> ait_total(bytesPerTact, 0);
-    std::vector<double> ait(bytesPerTact, 0);
-    for (int t = 0; t < tacts; t++) {
-        std::fill(ait.begin(), ait.end(), 0);
-        for (int i = 0; i < notes_count; i++) {
-            progress = "Note generating:" + std::to_string(i) + "/" + std::to_string(notes_count) + "in tact:" + std::to_string(t) + "/" + std::to_string(tacts);
-            if (durs[i].tact != t) {
-                continue;
+    
+    bool run = 1;
+    int max_tacts = 0;
+    int cur_track = 0;
+    int bytesPerTact;
+
+    while (run) {
+        std::vector<double> freqs;
+        std::vector<timezone> durs;
+        std::vector<tick_chord> chords;
+        run = note_interpreter(input, &pn, &tempo, &freqs, &durs, &tacts, cur_track, &instrument);
+        if (!run) {
+            break;
+        }
+
+
+        std::cout << "ni true" << std::endl;
+        size_t notes_count = freqs.size();
+        total_time = (int)(480000. / (double)tempo) * (tacts);
+        bytesPerTact = (int)((44100.) * (480. / (double)tempo));
+        std::vector<short> ait_total(bytesPerTact, 0);
+        std::vector<double> ait(bytesPerTact, 0);
+        double tempo_in_ticks = 480000. / (double)tempo / 32.;
+        get_chords(durs, &chords, tacts);
+        std::cout << "gc true" << std::endl;
+
+        for (int t = 0; t < tacts; t++) {
+            std::fill(ait.begin(), ait.end(), 0);
+            for (int i = 0; i < notes_count; i++) {
+                progress = "Note generating:" + std::to_string(i) + "/" + std::to_string(notes_count) + "in tact:" + std::to_string(t) + "/" + std::to_string(tacts);
+                if (durs[i].tact != t) {
+                    continue;
+                }
+                int ptr = (bytesPerTact / 32) * (durs[i].start % 32);
+                std::vector<double> note;
+                switch (instrument) {
+                case 0:
+                    note = sine_wave(freqs[i], tempo_in_ticks * durs[i].dur);
+                    break;
+                case 1:
+                    note = sawtooth_wave(freqs[i], tempo_in_ticks * durs[i].dur);
+                    break;
+                case 2:
+                    note = noise_32767(freqs[i], tempo_in_ticks * durs[i].dur);
+                    break;
+                case 3:
+                    note = drum_kit(freqs[i], tempo_in_ticks * durs[i].dur);
+                    break;
+                case 4:
+                    note = square_wave(freqs[i], tempo_in_ticks * durs[i].dur);
+                    break;
+                case 5:
+                    note = triangle_wave(freqs[i], tempo_in_ticks * durs[i].dur);
+                    break;
+                }
+                std::cout << "note true" << std::endl;
+                for (int k = 0; k < note.size(); k++) {
+                    if (ptr + k < ait.size()) {
+                        double sum = ait[ptr + k] + note[k];
+                        ait[ptr + k] = sum;
+                    }
+                }
+                int last_ptr = ptr;
             }
-            int ptr = (bytesPerTact / 32) * (durs[i].start % 32);
-            std::vector<double> note;
-            switch (instrument) {
-            case 0:
-                note = sine_wave(freqs[i], tempo_in_ticks * durs[i].dur);
-                break;
-            case 1:
-                note = sawtooth_wave(freqs[i], tempo_in_ticks * durs[i].dur);
-                break;
-            case 2:
-                note = noise_32767(freqs[i], tempo_in_ticks * durs[i].dur);
-                break;
-            case 3:
-                note = drum_kit(freqs[i], tempo_in_ticks * durs[i].dur);
-                break;
-            case 4:
-                note = square_wave(freqs[i], tempo_in_ticks * durs[i].dur);
-                break;
-            case 5:
-                note = triangle_wave(freqs[i], tempo_in_ticks * durs[i].dur);
-                break;
-            }
-            for (int k = 0; k < note.size(); k++) {
-                if (ptr + k < ait.size()) {
-                    double sum = ait[ptr + k] + note[k];
-                    ait[ptr + k] = sum;
+            int tick = ait.size() / 32;
+            for (int i = 0; i < 32; i++) {
+                progress = "Note divising:" + std::to_string(i) + "/" + std::to_string(notes_count) + "in tact:" + std::to_string(t) + "/" + std::to_string(tacts);
+                int divisor = 1;
+                int current_tick = i + (32 * t);
+                divisor = chords[current_tick].count;
+                if (divisor <= 1)
+                    divisor = 1;
+                for (int j = i * tick; j < (i + 1) * tick; j++) {
+                    ait[j] = ait[j] / (double)divisor;
                 }
             }
-            int last_ptr = ptr;
+            std::cout << "div true" << std::endl;
+
+            if (cur_track >= full_track.size()) {
+                full_track.resize(cur_track + 1);
+            }
+            full_track[cur_track].insert(full_track[cur_track].end(), ait.begin(), ait.end());
+            if(tacts > max_tacts)
+                max_tacts = tacts;
+            std::cout << "insert true" << std::endl;
         }
-        int tick = ait.size() / 32;
-        for (int i = 0; i < 32; i++) {
-            progress = "Note divising:" + std::to_string(i) + "/" + std::to_string(notes_count) + "in tact:" + std::to_string(t) + "/" + std::to_string(tacts);
-            int divisor = 1;
-            int current_tick = i + (32 * t);
-            divisor = chords[current_tick].count;
-            if (divisor <= 1)
-                divisor = 1;
-            for (int j = i * tick; j < (i + 1) * tick; j++) {
-                ait_total[j] = static_cast<short>(ait[j] / (double)divisor);
+        cur_track++;
+    }
+    std::cout << "end of while" << std::endl;
+    std::vector<short> full_sum(bytesPerTact*max_tacts, 0);
+    for (int i = 0; i < bytesPerTact * max_tacts; i++) {
+        int divisor = 1;
+        double sum = 0;
+        for (int j = 0; j < full_track.size(); j++) {
+            if (i <= full_track[j].size()) {
+                sum += full_track[j][i];
+                if(full_track[j][i] != 0. && full_track[j][i-1] != 0. && j != 0)
+                    divisor++;;
+            }
+            else {
+                sum += 0;
             }
         }
-        const char* pBegin = reinterpret_cast<const char*>(ait_total.data());
-        data.insert(data.end(), pBegin, pBegin + (ait_total.size() * sizeof(short)));
+        full_sum[i] = static_cast<short>((sum) / (divisor <= 1 ? 1 : divisor));
     }
+    std::cout << "summed" << std::endl;
+    const char* pBegin = reinterpret_cast<const char*>(full_sum.data());
+    data.insert(data.end(), pBegin, pBegin + (full_sum.size() * sizeof(short)));
+
     progress = "Creating headers";
     headers header;
     header.FileSize = (header.Freq * 4 * ((double)total_time / 1000)) + 36;
@@ -302,4 +371,6 @@ void create_sound(std::string filename, std::string input, int instrument, bool 
 
         progress = "Succecfully saved in RAM";
     }
+
+    std::cout << "filed" << std::endl;
 }

@@ -62,7 +62,7 @@ struct headers {
 //After note is 4 symbols, 2 first is starting tick in tact, 2 last is duration in ticks (start tick + duration < 32)
 //Durations: 01-1/32, 02-1/16, 04-1/8, 08-1/4, 16-1/2, 32-1/1, duration*1.5 for notes with point
 //Example: "120TCTC4.0008E4.0008G4.0008END" (C chord). Attention!!! Every tact has only 32 ticks!!!
-void static note_interpreter(std::string input, int* tempo, std::vector<double>* freqs, std::vector<timezone>* durs, int* tacts);
+bool static note_interpreter(std::string input, size_t* pos_next, int* tempo, std::vector<double>* freqs, std::vector<timezone>* durs, int* tacts, int track, int* instrument);
 
 //system to get how many notes in tick
 void static get_chords(std::vector<timezone> durs, std::vector<tick_chord>* chords, int tacts);
@@ -95,4 +95,4 @@ std::vector<double> static triangle_wave(double freq, int time);
 std::vector<double> static square_wave(double freq, int time);
 
 //main function to generate file
-void create_sound(std::string filename, std::string input, int instrument, bool memory, std::vector<char>& memoryfile, std::string& progress);
+void create_sound(std::string filename, std::string input, bool memory, std::vector<char>& memoryfile, std::string& progress);

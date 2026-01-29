@@ -30,10 +30,17 @@ struct note {
     float y;
 };
 
+
+struct track {
+    int radio = 0;
+    std::array<std::string, 1024> ts;
+    int total_tacts = 0;
+};
+
 float position = 0;
 //32*120 = ticks*notes
 std::array<note, 32 * 120> notes;
-std::array<std::string, 1024> tact_strs;
+std::array<track, 255> tracks;
 const char* note_sign[12] = {"C.", "C+", "D.", "D+", "E.", "F.", "F+", "G.", "G+", "A.", "A+", "B."};
 std::string total = "";
 ImVec2 first_pos = { 0., 0. };
@@ -62,7 +69,7 @@ void string_to_array(std::string intact, int tact, std::array<note, 32 * 120>& g
 std::string array_to_string(const std::array<note, 32 * 120>& notes, int tact);
 std::string save_file_dialog(std::string name, std::string ext);
 std::string open_file_dialog();
-void load_string(int& total_tacts, std::string& total, std::string buffer, int& tact, int& tempo);
+void load_string(int& total_tacts, std::string& total, std::string buffer, int& tact, int& tempo, int& track);
 std::string work_dir;
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
@@ -181,35 +188,54 @@ std::string open_file_dialog() {
     }
 }
 
-void load_string(int& total_tacts, std::string& total, std::string buffer, int& tact, int& tempo) {
+void load_string(int& total_tracks, std::string& total, std::string buffer, int& tact, int& tempo, int& track) {
     for (int i = 0; i < 32 * 120; i++) {
         notes[i].state = 0;
     }
-
-    total_tacts = 0;
+    size_t pos = 0;
+    total_tracks = 0;
     total = buffer;
-    tact = 0;
+
     tempo = stoi(total.substr(0, 3));
-    std::string formed = std::string(buffer).substr(6, buffer.length() - 9);
-    std::string to_tact = "";
-    for (int i = 0; i < formed.length() + 1; i++) {
-        if (formed[i] == 'T' || i == formed.length()) {
-            string_to_array(to_tact, tact, notes);
-            tact_strs[tact] = array_to_string(notes, tact);
-            tact++;
-            total_tacts++;
-            if (i < formed.length() - 1) {
-                i += 2;
+    std::string formed = std::string(buffer).substr(3, buffer.length() - 3);
+    std::cout << formed << std::endl;
+    std::string to_track = "";
+    while (pos < formed.length()-3) {
+        while (formed[pos] != 'E') {
+            to_track += formed[pos];
+            pos++;
+        }
+        if(formed[pos] == 'E' && to_track != "") {
+            tact = 0;
+            std::string to_tact = "";
+            tracks[track].radio = stoi(to_track.substr(0,3));
+            to_track = to_track.substr(6, to_track.length());
+            std::cout << to_track << std::endl;
+            for (int i = 0; i < to_track.length() + 1; i++) {
+                if (to_track[i] == 'T' || i == to_track.length()) {
+                    string_to_array(to_tact, tact, notes);
+                    tracks[track].ts[tact] = array_to_string(notes, tact);
+                    tact++;
+                    //total_tacts++;
+                    if (i < to_track.length() - 1) {
+                        i += 2;
+                    }
+                    to_tact = "";
+                    continue;
+                }
+                else {
+                    to_tact += to_track[i];
+                }
             }
-            to_tact = "";
-            continue;
+            track++;
+            pos += 3;
+            to_track = "";
         }
-        else {
-            to_tact += formed[i];
-        }
+        std::cout << pos << formed.length()<< std::endl;
     }
+    track = 0;
     tact = 0;
-    string_to_array(tact_strs[tact], tact, notes);
+    string_to_array(tracks[0].ts[0], tact, notes);
 }
 
 void MainWindow() {
@@ -217,13 +243,16 @@ void MainWindow() {
         mem_buf.clear();
     ImGui::Begin("Window", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus);
 
+
     static int tempo = 120;
+    static int ctrack = 0;
     static std::string progress = "Waiting for render";
-    static char ib[6553600] = "";
     static int tact = 0;
     static int instrument_radio = 0;
-    int total_tacts = 1;
+    int total_tracks = 0;
     ImGuiIO& io = ImGui::GetIO();
+
+    tracks[ctrack].radio = instrument_radio;
 
     ImGui::Text("Choose instrument:");
     ImGui::RadioButton("Sine wave", &instrument_radio, 0);
@@ -242,21 +271,17 @@ void MainWindow() {
         }
     }
     ImGui::SetNextItemWidth(200.0f);
-    ImGui::InputText("Text to load", ib, sizeof(ib));
-    if (ImGui::Button("Load Project from string")) {
-        load_string(total_tacts, total, ib, tact, tempo);
-    }
     if (ImGui::Button("Load Project from .txt")) {
         std::string filename = open_file_dialog();
         std::ifstream MyFile(filename);
         std::string line;
         if (MyFile.is_open()) {
             std::getline(MyFile, line);
-            load_string(total_tacts, total, line, tact, tempo);
+            load_string(total_tracks, total, line, tact, tempo, ctrack);
             MyFile.close();
         }
     }
-    if (ImGui::Button("Play")) {
+    if (ImGui::Button("Play (not works)")) {
         //use another library (winapi sucks TOO MUCH)
         //sndPlaySoundA(NULL, 0);
         //create_sound("test", total, instrument_radio, true, mem_buf);
@@ -270,7 +295,7 @@ void MainWindow() {
     if (ImGui::Button("Render .wav")) {
         std::string filename = save_file_dialog("WAVE file", "wav");
         //strange but interesting
-        std::future<void> func_res = std::async(std::launch::async, create_sound, filename, total, instrument_radio, false, std::ref(mem_buf), std::ref(progress));
+        std::future<void> func_res = std::async(std::launch::async, create_sound, filename, total, false, std::ref(mem_buf), std::ref(progress));
     }
     ImGui::SameLine();
     ImGui::Text(progress.c_str());
@@ -280,12 +305,24 @@ void MainWindow() {
     ImGui::Text("Tact: %d", tact);
     if (ImGui::Button("Prev Tact")) {
         (tact > 0) ? tact-- : tact = 0;
-        string_to_array(tact_strs[tact], tact, notes);
+        string_to_array(tracks[ctrack].ts[tact], tact, notes);
     }
     ImGui::SameLine();
     if (ImGui::Button("Next Tact")) {
-        tact++;
-        string_to_array(tact_strs[tact], tact, notes);
+        (tact < 1024) ? tact++ : tact = 1023;
+        string_to_array(tracks[ctrack].ts[tact], tact, notes);
+    }
+    ImGui::Text("Track: %d", ctrack);
+    if (ImGui::Button("Prev Track")) {
+        (ctrack > 0) ? ctrack-- : ctrack = 0;
+        instrument_radio = tracks[ctrack].radio;
+        string_to_array(tracks[ctrack].ts[tact], tact, notes);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Next Track")) {
+        (ctrack < 255) ? ctrack++ : ctrack = 254;
+        instrument_radio = tracks[ctrack].radio;
+        string_to_array(tracks[ctrack].ts[tact], tact, notes);
     }
 
     ImVec2 mouse = ImGui::GetMousePos();
@@ -354,18 +391,33 @@ void MainWindow() {
     }
     total = "";
     total += std::to_string(tempo);
-    tact_strs[tact] = array_to_string(notes, tact);
-    for (int i = total_tacts; i < 1024; i++) {
-        if (tact_strs[i] != "") {
-            total_tacts = i+1;
+    tracks[ctrack].ts[tact] = array_to_string(notes, tact);
+
+    //recreate in future (not deleting tacts/track if there is no notes in tact/track)
+    for (int t = total_tracks; t < 255; t++) {
+        if (tracks[t].total_tacts != 0) {
+            total_tracks = t+1;
         }
     }
-    for (int i = 0; i < total_tacts; i++) {
-        total += "TCT";
-        total += tact_strs[i];
+    for (int t = 0; t < total_tracks+1; t++) {
+        if (t != total_tracks) {
+            std::string new_instr = std::format("{:03}", tracks[t].radio);
+            total += new_instr;
+        }
+        for (int i = tracks[t].total_tacts; i < 1024; i++) {
+            if (tracks[t].ts[i] != "") {
+                tracks[t].total_tacts = i + 1;
+            }
+        }
+        for (int i = 0; i < tracks[t].total_tacts; i++) {
+            total += "TCT";
+            total += tracks[t].ts[i];
+        }
+        if (t != total_tracks)
+            total += "END";
     }
-    total += "END";
-    ImGui::Text("mouse x: %f\nmouse y: %f\non screen: %d\nnote, tick:{%s%d, %d}\nstate: %d\ntotal tacts: %d", mouse.x, mouse.y, on_screen, note_sign[cn % 12], cn / 12, ct, st, total_tacts);
+    total += "EOF";
+    ImGui::Text("mouse x: %f\nmouse y: %f\non screen: %d\nnote, tick:{%s%d, %d}\nstate: %d\ntotal tracks: %d\ntotal tacts: %d", mouse.x, mouse.y, on_screen, note_sign[cn % 12], cn / 12, ct, st, total_tracks, tracks[ctrack].total_tacts);
     ImGui::Text("Application in development! Use custom\nstrings at your own risk! They can\ncrash application with wrong formatting!\n(in drum kit)\nkick C0, clap C0+, hihat D0, snare D0+");
     ImGui::PushTextWrapPos(320);
     ImGui::TextWrapped("Text: %s", total.c_str());
@@ -455,7 +507,7 @@ int CreateGUI() {
     RegisterClassExW(&wc);
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"SynthDaw v0.0.2a | Save your music!", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, 200, 200, screenWidth/2, screenHeight/2, nullptr, nullptr, wc.hInstance, nullptr);
+    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"SynthDaw v0.0.3 alpha | 256 track!! DRUMS!!! NEW INSTRUMENTS!!! 35MB of RAM app using omg!", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, 200, 200, screenWidth/2, screenHeight/2, nullptr, nullptr, wc.hInstance, nullptr);
 
     if (!CreateDeviceD3D(hwnd))
     {
